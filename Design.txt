@@ -1,0 +1,172 @@
+	 static Semaphore line = new Semaphore(0, true);            //customer que of entering the building at the same time in a line
+	 static Semaphore key0 = new Semaphore(0, true);            //key handing off for front0 
+	 static Semaphore key1 = new Semaphore(0, true);            // key handing off for front1
+	 static Semaphore keyConfirm0 = new Semaphore(0, true);     //key confirms it reached customer from front0
+	 static Semaphore keyConfirm1 = new Semaphore(0, true);     //key confirms it reached customer from front1
+	 static Semaphore tellName0 = new Semaphore(0, true);       //customer signals to front 0 their name
+	 static Semaphore tellName1 = new Semaphore(0, true);       //customer signals to front 1 their name
+	 static Semaphore givekeys = new Semaphore(0, true);        //customer gets keys 
+	 
+	 static Semaphore bellhopline = new Semaphore(0, true);     //for the line when waiting for bell hop
+	 static Semaphore GuestGiveBags0 = new Semaphore(0, true);  //Guest give bellhop0 bags
+	 static Semaphore GuestGiveBags1 = new Semaphore(0, true);  //Guest give bellhop1 bags
+	 static Semaphore bellhop0ReciveBags = new Semaphore(0, true); //bellhop0 receives bags
+	 static Semaphore bellhop1ReciveBags = new Semaphore(0, true); //bellhop1 receives bags
+	 static Semaphore bellhop0Bring = new Semaphore(0, true);   //bellhop0 brings bags 
+	 static Semaphore bellhop1Bring = new Semaphore(0, true);   //bellhop1 brings bags
+	 static Semaphore bellhop0Room = new Semaphore(0, true);    //bellhop0 brings bags to room after guest signal
+	 static Semaphore bellhop1Room= new Semaphore(0, true);     //bellhop1 brings bags to room after guest signal
+	 static Semaphore bellhop0Tip = new Semaphore(0, true);     //bellhop0 signal for customer tip
+	 static Semaphore bellhop1Tip = new Semaphore(0, true);     //bellhop1 signal for customer tip
+	 
+	 static Semaphore join = new Semaphore(0, true); //signal join function
+	 static Semaphore joinIDTransfer = new Semaphore(0, true); //signal fetch guestID to join the thread
+	 static Semaphore joinIDTransferConfirmed = new Semaphore(0, true);//signal confirmation of transfer
+	 
+	 static Thread makeFront[] = new Thread[2]; //front employee threads
+	 static Thread makeBellhop[] = new Thread[2]; //bellhop threads
+	 static Thread makeGuest[] = new Thread[numberOfGuest]; //guest threads
+	 static guest guest[] = new guest[4]; //global for transfering infromation between guest and employees
+                                          //0 = front0
+                                          //1 = front1
+                                          //2 = bellhop0
+                                          //3 = bellhop1
+                                          
+     main
+        make front employees
+        make bellhops employees
+        make guests
+
+        while (true)
+            wait for a guest to signal joinIDTransfer
+            signal guest to send ID
+            wait for guest to end ID
+            join guest
+            print guest joining
+
+            if all guest have been joined 
+                exit
+
+==========================================================================================
+
+    guest
+        bags,ID,room,key
+        
+        constructors
+            make guest with ID 
+            make guest with ID and bags 
+            make guest with ID and bags and roomNumber
+
+        enter() 
+            print that guest has entered hotel with bag/s 
+
+        request()
+            print that guest needs help with bags 
+
+        enterRoom()
+            print guest enters room 
+
+        tellID()                                    //critical section for guest and front1/front0
+            if guestID is even, save to guest[0]
+                signal to front0 they saved name
+                wait for front0 to give key and room 
+                key = true 
+                room = guest[0].room
+                print guest has keys and room
+                signal front0 that they have the key
+
+            else 
+                do above operation but save to guest[1] with front1
+
+
+        giveBags()                                  //critical section for guest and bellhop0/bellhop1
+            if guestID is even, use guest[2]
+                requestHelp();
+                save to guest[2]
+                signal bellhop0 to take bags
+                wait for bellhop0 to recieve bags
+                enterRoom()
+                signal bellbop0 to bring bags
+                wait for bellhop0 to bring bags
+                print give tip
+                signal bellhop0 for the tip
+            else, do the same above for bellhop1, but save with guest[3]
+        
+        run()
+            enter()
+            wait in line, wait for front employees to signal
+            tellID()
+
+            if bags <= 2
+                enter room 
+            else 
+                enter bellhop line, wait for bell hop to signal
+                giveBags() to bellhop
+
+            join()
+
+
+==========================================================================================
+    front
+        num, KnowName, holdRoom
+
+        constructors
+            front_desk_Employee(x)
+                create front desk employee with num = x
+
+        checkIn(int guest, int room)
+            print employee num registers guest GuestID at room 
+            KnowName = guest, the employee remebers the guestID to reference later
+            holdRoom = room , the employee remebers the guest's room to reference later 
+        
+        signGuest()                                          //guest accesses front1/0 and enters critical section
+            if front0
+                wait for guest to save name to guest[0]
+                checkIn(main.guest[0].getID(), ++main.room), check in and remeber guest
+                main.guest[0].room = holdRoom, this will assign the guest their room
+                signal guest to take the key
+                wait for the guest to recieve the key, front wont get to next guest untill current guest has keys
+            else front 1
+                ^^^^ perform same operation, but with front1, and use guest[1]
+
+            //this way we have front1 and front2 operating concurrently respective guests as a resource
+        
+
+        run()
+            while true  
+                signal next guest in line
+                SignGuest();
+
+=====================================================================================================================
+
+    bellhop
+        num,knowName,HoldRoom,tip = 0
+    
+    constructor
+        bellhop(x)
+            num = x;
+            print it being created
+
+    recieveBags()
+        if(bellhop0)
+            wait for guest give bags/save in guest[2]
+            fetch guest info from guest[2]
+            print bellhop0 recieving the bags 
+            signal guest that bellhop0 has the bags
+            wait for guest to enter room
+            bellhop0 delivers bags to room
+            signal guest hes at the room with bags
+            wait for guest to tip
+            tip++;
+        else, do the above but with bellhop1 and fetch from guest[3]
+
+
+    run()
+
+        while(true)
+            signal guest in belllline is ready
+            recieveBags();
+
+
+
+
